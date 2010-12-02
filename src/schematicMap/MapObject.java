@@ -25,4 +25,12 @@ public abstract class MapObject {
 	public void deselect() {
 		selected = false;
 	}
+	
+	public boolean isPoint() {
+		return false;
+	}
+	
+	public boolean isSegment() {
+		return false;
+	}
 }

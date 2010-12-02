@@ -23,6 +23,24 @@ public class MapSegment extends MapObject {
 		return result;
 	}
 	
+	public boolean isSegment() {
+		return true;
+	}
+	
+	public String toString() {
+		Point point1 = endpoints[0].getCoordinates();
+		Point point2 = endpoints[1].getCoordinates();
+		
+		String result =  "MapSegment (" + point1.x + ", " + point1.y + ") to " + 
+			"(" + point2.x + ", " + point2.y + ") " + color.toString(); 
+		
+		if (selected) {
+			result += " selected";
+		}
+		
+		return result;
+	}
+	
 	/*----------------------------------------
 	 * PROTECTED METHODS
 	 * ---------------------------------------
@@ -41,8 +59,16 @@ public class MapSegment extends MapObject {
 		
 		endpoints[0] = pt1;
 		endpoints[1] = pt2;
+		color = c;
 	}
 	
+	protected MapPoint[] getMapPoints() {
+		return endpoints;
+	}
+	
+	protected double getLength() {
+		return endpoints[0].getCoordinates().distance(endpoints[1].getCoordinates());
+	}
 	
 	protected MapPoint getOpposite(MapPoint pt) {
 		if (endpoints[0] == pt) {

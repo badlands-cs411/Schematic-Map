@@ -2,10 +2,12 @@ package schematicMap;
 import java.awt.Color;
 import java.awt.Point;
 import java.awt.geom.Point2D;
+import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
+import java.util.PriorityQueue;
 import java.util.Stack;
 import java.util.concurrent.Semaphore;
 
@@ -18,19 +20,15 @@ public class SchematicMap {
 	private LinkedList<MapObject> selected;
 	private MapPoint lastAdded;
 	
-	private Semaphore mapLock;
 	
 	public SchematicMap() {
 		map = new LinkedList<MapPoint>();
-		mapLock = new Semaphore(1);
+		selected = new LinkedList<MapObject>();
 	}
 	
 	public synchronized void addPoint(int x, int y, Color color) {
-		
 		lastAdded = new MapPoint(x, y, color);
 		map.add(lastAdded);
-		
-		
 		
 	}
 
@@ -41,7 +39,6 @@ public class SchematicMap {
 	}
 	
 	public synchronized void removePoint(MapPoint toRemove) {
-		;
 		
 		// remove all adjacent edges from all neighbor nodes
 		for (MapSegment edge : toRemove.getAdjacencies()) {
@@ -58,9 +55,8 @@ public class SchematicMap {
 			selected.remove(toRemove);
 			map.remove(toRemove);
 		} catch (NoSuchElementException e) {
+			e.printStackTrace();
 		}
-		
-		
 		
 	}
 
@@ -81,8 +77,6 @@ public class SchematicMap {
 				selected.remove(ms);
 			}
 		}
-		
-		
 	}
 
 	public synchronized void connectPoints(int x1, int y1, int x2, int y2, Color c) {
@@ -105,8 +99,6 @@ public class SchematicMap {
 	public synchronized Point lastPointAdded()  {
 		
 		Point result = lastAdded.getCoordinates(); 
-		
-		
 		return result;
 		
 	}
@@ -281,8 +273,8 @@ public class SchematicMap {
 			toUpdate.add(obj);
 		}
 		
-		int numSelected = selected.size();
-		for (int i = 0; i < numSelected; i++) {
+		
+		while(!toUpdate.isEmpty()) {
 			
 			MapObject curObj = toUpdate.peekFirst();
 			
@@ -302,8 +294,17 @@ public class SchematicMap {
 			else if (curObj.getClass().equals(MapSegment.class)) {
 				MapSegment curSegment = (MapSegment) toUpdate.removeFirst();
 				
+				MapPoint[] points = curSegment.getMapPoints();
 				
-				
+				for (int i = 0; i < 2; i++) {
+					MapPoint curPoint = points[i];
+					
+					if (toUpdate.contains(curPoint)) {
+						Point curLoc = curPoint.getCoordinates();
+						curPoint.setCoordinates(curLoc.x + dx, curLoc.y + dy);
+						toUpdate.remove(curPoint);
+					}
+				}
 			}
 			
 		}
@@ -327,7 +328,103 @@ public class SchematicMap {
 	}
 
 	public synchronized MapObject[] getMapState() {
-		return null;
+		ArrayList<MapObject> dynamicState = new ArrayList<MapObject>();
+		
+		for(MapPoint curPoint : map) {
+			dynamicState.add(curPoint);
+			
+			for (MapSegment curSegment : curPoint.getAdjacencies()) {
+				if (!dynamicState.contains(curSegment) && curSegment != null) {
+					dynamicState.add(curSegment);
+				}
+			}
+		}
+		
+		MapObject[] state = new MapObject[dynamicState.size()];
+		
+		int i = 0;
+		for (MapObject curObj : dynamicState) {
+			state[i] = curObj;
+			i++;
+		}
+		
+		return state;
 	}
 	
+	public synchronized void selectSeries(int startx, int starty, int endx, int endy) {
+		MapPoint start = pointAt(startx, starty);
+		MapPoint end = pointAt(endx, endy);
+		
+		if (start != null && end != null) {
+			MapObject[] path =  shortestPath(start, end);
+			
+			for (MapObject obj : path) {
+				this.selectObject(obj);
+			}
+		}
+	}
+	
+	protected synchronized MapObject[] shortestPath(MapPoint src, MapPoint dst) {
+		if (src == dst) {
+			return new MapObject[0];
+		}
+		
+		PriorityQueue<MapPoint> queue = new PriorityQueue<MapPoint>();
+		PriorityQueue<MapPoint> examined = new PriorityQueue<MapPoint>();
+				
+		// add all to a priority queue
+		// queue is sorted on distance from src
+		for (MapPoint curPoint : map) {
+			curPoint.dijDistance = Double.MAX_VALUE;
+			curPoint.dijPreviousHop = null;
+			
+			queue.add(curPoint);
+		}
+		src.dijDistance = 0;
+		
+		MapPoint curPoint = null;
+		
+		while(!queue.isEmpty()) {
+			curPoint = queue.remove();
+			examined.add(curPoint);
+			
+			if (curPoint.dijDistance == Double.MAX_VALUE
+					|| curPoint == dst) {
+				break;
+			} 
+			
+			for (MapSegment curAdj : curPoint.getAdjacencies()) {
+				MapPoint curNeighbor = curAdj.getOpposite(curPoint);
+				
+				if (!examined.contains(curNeighbor)) { // if the current neighbor's path hasn't already stabilized
+					double alternateDist = curPoint.dijDistance + curAdj.getLength();
+					
+					if (alternateDist < curNeighbor.dijDistance) {
+						curNeighbor.dijDistance = alternateDist;
+						curNeighbor.dijPreviousHop = curAdj;
+					}	
+				}
+			}
+		}
+		
+		Stack<MapObject> path = new Stack<MapObject>();
+		
+		curPoint = dst;
+		while(curPoint != src) {
+			path.push(curPoint);
+			path.push(curPoint.dijPreviousHop);
+			
+			curPoint = curPoint.dijPreviousHop.getOpposite(curPoint);
+		}
+		path.push(src);
+		
+		int numElements = path.size();
+		MapObject[] resultPath = new MapObject[numElements];
+		
+		for (int i = 0; i < numElements; i++) {
+			resultPath[i] = path.pop();
+		}
+		
+		return resultPath;
+	}	
 }

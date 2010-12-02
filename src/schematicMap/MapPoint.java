@@ -4,22 +4,29 @@ import java.awt.Point;
 import java.util.LinkedList;
 
 
-public class MapPoint extends MapObject {
+public class MapPoint extends MapObject implements Comparable {
 	private Point coordinates;
 	private LinkedList<MapSegment> adjacencies;
 	
-	public MapPoint(int x, int y, Color c) {
+	protected double dijDistance;
+	protected MapSegment dijPreviousHop;
+	
+	protected MapPoint(int x, int y, Color c) {
 		init(x, y, c, null);
 	}
 	
-	public MapPoint(int x, int y, Color c, MapSegment adj) {
+	public boolean isPoint() {
+		return true;
+	}
+	
+	protected MapPoint(int x, int y, Color c, MapSegment adj) {
 		init(x, y, c, adj);
 	}
 	
 	private void init(int x, int y, Color c, MapSegment adj) {
-		adjacencies.add(adj);
+		adjacencies = new LinkedList<MapSegment>();
 		
-		selected = true;
+		selected = false;
 		
 		coordinates = new Point(x, y);
 		
@@ -36,11 +43,11 @@ public class MapPoint extends MapObject {
 		return adjacencies;
 	}
 	
-	public void addAdjacency(MapSegment seg) {
+	protected void addAdjacency(MapSegment seg) {
 		adjacencies.add(seg);
 	}
 	
-	public void removeAdjacency(MapSegment seg) {
+	protected void removeAdjacency(MapSegment seg) {
 		adjacencies.remove(seg);
 	}
 	
@@ -54,6 +61,36 @@ public class MapPoint extends MapObject {
 	
 	public void setCoordinates(int x, int y) {
 		coordinates = new Point(x,y);
+	}
+	
+	public String toString() {
+		String result =  "MapPoint (" + coordinates.x + ", " + coordinates.y + ") " + color.toString(); 
+		
+		if (selected) {
+			result += " selected";
+		}
+		
+		return result;
+	}
+
+	/*
+	 * compareTo() - allows points to be sorted in a priority
+	 *    queue in the implementation of Dijkstra's algorithm
+	 *    Note: This comparison function orders points in 
+	 *    REVERSE natural order, so that points with smaller
+	 *    distance are given higher priority
+	 */
+	public int compareTo(Object o) {
+		MapPoint other = (MapPoint) o;
+		if (this.dijDistance > other.dijDistance) {
+			return -1;
+		}
+		
+		if (this.dijDistance < other.dijDistance) {
+			return 1;
+		}
+		
+		return 0;
 	}
 	
 }

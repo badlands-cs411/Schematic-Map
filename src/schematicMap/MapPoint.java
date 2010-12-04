@@ -76,18 +76,16 @@ public class MapPoint extends MapObject implements Comparable {
 	/*
 	 * compareTo() - allows points to be sorted in a priority
 	 *    queue in the implementation of Dijkstra's algorithm
-	 *    Note: This comparison function orders points in 
-	 *    REVERSE natural order, so that points with smaller
-	 *    distance are given higher priority
+	 *    
 	 */
 	public int compareTo(Object o) {
 		MapPoint other = (MapPoint) o;
 		if (this.dijDistance > other.dijDistance) {
-			return -1;
+			return 1;
 		}
 		
 		if (this.dijDistance < other.dijDistance) {
-			return 1;
+			return -1;
 		}
 		
 		return 0;

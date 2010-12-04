@@ -310,23 +310,84 @@ public class SchematicMap {
 		}
 	}
 
-	public synchronized void projectSelectionHorizontal() {
+	public synchronized boolean projectSelectionHorizontal() {
+		double totalLength = selectionPathLength();
 		
+		if (totalLength < 0) {
+			return false;
+		}
+		
+		int numPoints = (selected.size() - 1) / 2;
+		
+		if (numPoints < 2) {
+			return false;
+		}
+		
+		MapPoint leftmost = null;
+		int smallestX = Integer.MAX_VALUE;
+		MapPoint rightmost = null;
+		int largestX = Integer.MIN_VALUE;
+		
+		MapPoint leftTerminus = null;
+		
+		// pick leftmost and rightmost selected points
+		for (MapObject curObj : selected) {
+			if (curObj.isPoint()) {
+				MapPoint curPoint = (MapPoint) curObj;
+				
+				int thisX = curPoint.getCoordinates().x;
+				if (thisX < smallestX) {
+					smallestX = thisX;
+					leftmost = curPoint;
+				} 
+				
+				if (thisX > largestX) {
+					rightmost = curPoint;
+					largestX = thisX;
+				}
+				
+				int degree = 0;
+				
+				for (MapSegment curAdj : curPoint.getAdjacencies()) {
+					if (selected.contains(curAdj)) {
+						degree++;
+					}
+				}
+				
+				if (degree == 1) {
+					if (leftTerminus == null) {
+						leftTerminus = curPoint;
+					} else if (leftTerminus.getCoordinates().x > curPoint.getCoordinates().x) {
+						leftTerminus = curPoint;
+					}
+				}
+			}
+		}
+		
+		int finalLength = largestX - smallestX;
+		
+		leftTerminus.setCoordinates(leftmost.getCoordinates().x, leftTerminus.getCoordinates().y);
 	}
 
 
-	public synchronized void projectSelectionVertical() {
+	public synchronized boolean projectSelectionVertical() {
 		
 	}
 
-	public synchronized void projectSelectionPosSlope() {
+	public synchronized boolean projectSelectionPosSlope() {
 		
 	}
 
-	public synchronized void projectSelectionNegSlope() {
+	public synchronized boolean projectSelectionNegSlope() {
 		
 	}
 
+	public synchronized MapObject[] getSelected() {
+		MapObject[] result = (MapObject[]) selected.toArray();
+		
+		return result;
+	}
+	
 	public synchronized MapObject[] getMapState() {
 		ArrayList<MapObject> dynamicState = new ArrayList<MapObject>();
 		
@@ -378,15 +439,17 @@ public class SchematicMap {
 			curPoint.dijDistance = Double.MAX_VALUE;
 			curPoint.dijPreviousHop = null;
 			
-			queue.add(curPoint);
+			queue.offer(curPoint);
 		}
+		
+		queue.remove(src);
 		src.dijDistance = 0;
+		queue.offer(src);
 		
 		MapPoint curPoint = null;
 		
 		while(!queue.isEmpty()) {
-			curPoint = queue.remove();
-			examined.add(curPoint);
+			curPoint = queue.poll();
 			
 			if (curPoint.dijDistance == Double.MAX_VALUE
 					|| curPoint == dst) {
@@ -400,11 +463,17 @@ public class SchematicMap {
 					double alternateDist = curPoint.dijDistance + curAdj.getLength();
 					
 					if (alternateDist < curNeighbor.dijDistance) {
+						queue.remove(curNeighbor);
+						
 						curNeighbor.dijDistance = alternateDist;
 						curNeighbor.dijPreviousHop = curAdj;
+						
+						queue.offer(curNeighbor);
 					}	
 				}
 			}
+			
+			examined.add(curPoint);
 		}
 		
 		Stack<MapObject> path = new Stack<MapObject>();
@@ -416,6 +485,7 @@ public class SchematicMap {
 			
 			curPoint = curPoint.dijPreviousHop.getOpposite(curPoint);
 		}
+		
 		path.push(src);
 		
 		int numElements = path.size();
@@ -427,4 +497,153 @@ public class SchematicMap {
 		
 		return resultPath;
 	}	
+	
+	protected synchronized boolean selectionIsColinear() {
+		if (!selectionIsPath()) {
+			return false;
+		}
+		
+		MapPoint leftmost = null;
+		int smallestX = Integer.MAX_VALUE;
+		MapPoint point2 = null;
+		
+		// pick two points from the selection
+		for (MapObject curObj : selected) {
+			if (curObj.isPoint()) {
+				MapPoint curPoint = (MapPoint) curObj;
+				
+				int thisX = curPoint.getCoordinates().x;
+				if (thisX < smallestX) {
+					smallestX = thisX;
+					point2 = leftmost;
+					leftmost = curPoint;
+				} else {
+					point2 = curPoint;
+				}
+			}
+		}
+		
+		// determine the slope of the vector between the points
+		int dx = point2.getCoordinates().x - leftmost.getCoordinates().x;
+		int dy = point2.getCoordinates().y - leftmost.getCoordinates().y;
+		
+		double m = dy/dx;
+		
+		// for each other point in the selection, determine if
+		// the vector between the first point and it are
+		// coincident to the first slope calculated within rounding error
+		
+		int firstX = leftmost.getCoordinates().x;
+		int firstY = leftmost.getCoordinates().y;
+		
+		for (MapObject curObj : selected) {
+			if (curObj.isPoint() && curObj!= leftmost) {
+				MapPoint curPoint = (MapPoint) curObj;
+				
+				dx = curPoint.getCoordinates().x - firstX;
+				dy = curPoint.getCoordinates().y - firstY;
+				
+				// if slopes differ, return false
+				if (Math.abs(m - dy/dx) > .01) {
+					return false;
+				}
+			}
+		}
+		
+		return true;
+	}
+	
+	public synchronized boolean selectionIsPath() {
+		LinkedList<MapObject> selectedQueue = new LinkedList<MapObject>();
+		
+		// copy selected elements, and pick some start point
+		MapPoint startPoint = null;
+		
+		for (MapObject curObj : selected) {
+			if (curObj.isPoint()) {
+				startPoint = (MapPoint) curObj;
+			}
+			
+			selectedQueue.add(curObj);
+		}
+		
+		
+		// if there were no points in the selection, return false
+		if (startPoint == null) {
+			return false;
+		}
+		
+		// from the start point trace a path to an endpoint
+		selectedQueue.remove(startPoint);
+		if (canTracePath(selectedQueue, startPoint)) {
+			
+			// if the queue is exhausted (we must have started with
+			// a terminating point of the path) return true
+			if (selectedQueue.isEmpty()) {
+				return true;
+			} 
+			
+			// else see if se can trace a path to the other terminating
+			// endpoint, if there are no elements left in the selected 
+			// queue after we're done tracing this path, we're done,
+			// else this is not a path
+			if (canTracePath(selectedQueue, startPoint)) {
+				if (selectedQueue.isEmpty()) {
+					return true;
+				}
+			}
+		}
+		
+		return false;
+	}
+	
+	protected synchronized boolean canTracePath(LinkedList<MapObject> selectedQueue, MapPoint startPoint) {
+		for (MapSegment curAdj : startPoint.getAdjacencies()) {
+			
+			// if there is an edge in the selection connected to this node
+			if (selectedQueue.contains(curAdj)) {
+				//remove that edge from the queue
+				selectedQueue.remove(curAdj);
+				
+				// if the neighbor along that edge is also in the selection
+				MapPoint curNeighbor = curAdj.getOpposite(startPoint);
+				if (selectedQueue.contains(curNeighbor)) {
+					
+					// see if we can trace a path from this neighbor along unvisited
+					// edges in the selection
+					selectedQueue.remove(curNeighbor);
+					return canTracePath(selectedQueue, curNeighbor);
+				} else {
+					
+					// we've got a hanging edge without a bounding node
+					return false;
+				}
+			}
+		}
+		
+		// this is the endpoint
+		return true;
+	}
+	
+	/**
+	 * @return The collective length of all segments along the selected path,
+	 * or -1 if the selection is not a path
+	 */
+	protected synchronized double selectionPathLength() {
+		if (!selectionIsPath()) {
+			return -1;
+		}
+		
+		double count = 0;
+		
+		for (MapObject curObj : selected) {
+			if (curObj.isSegment()) {
+				MapSegment curSegment = (MapSegment) curObj;
+				
+				count += curSegment.getLength();
+			}
+		}
+		
+		return count;
+	}
 }

@@ -309,7 +309,7 @@ public class SchematicMap {
 			
 		}
 	}
-
+/*
 	public synchronized boolean projectSelectionHorizontal() {
 		double totalLength = selectionPathLength();
 		
@@ -367,6 +367,8 @@ public class SchematicMap {
 		int finalLength = largestX - smallestX;
 		
 		leftTerminus.setCoordinates(leftmost.getCoordinates().x, leftTerminus.getCoordinates().y);
+		
+		for (int i = 1; i < num)
 	}
 
 
@@ -380,7 +382,7 @@ public class SchematicMap {
 
 	public synchronized boolean projectSelectionNegSlope() {
 		
-	}
+	}*/
 
 	public synchronized MapObject[] getSelected() {
 		MapObject[] result = (MapObject[]) selected.toArray();
